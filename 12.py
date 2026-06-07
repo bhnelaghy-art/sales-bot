@@ -17,7 +17,7 @@ def append_to_sheet(name, phone):
         values = [[name, phone, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]]
         service.spreadsheets().values().append(
             spreadsheetId=SPREADSHEET_ID,
-            range="Sheet1!A:C", # تأكد إن اسم الشيت عندك Sheet1 أو غيره
+            range=f"{sheet_name}!A:C", # تأكد إن اسم الشيت عندك Sheet1 أو غيره
             valueInputOption="RAW",
             body={"values": values}
         ).execute()
