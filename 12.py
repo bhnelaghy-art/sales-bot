@@ -5,12 +5,12 @@ from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-# ضيف السطر ده عشان يقرأ الملف
+# قراءة ملف المعرفة
 with open("knowledge.txt", "r", encoding="utf-8") as f:
     knowledge_base = f.read()
 
-# وغير الـ system_prompt عشان يستخدم الـ knowledge_base دي:
-ب= f"""
+# تعريف الـ system_prompt بشكل صحيح
+system_prompt = f"""
 أنت وحش المبيعات المحترف. 
 معلومات الكورس التي يجب أن تلتزم بها هي:
 {knowledge_base}
@@ -20,6 +20,7 @@ with open("knowledge.txt", "r", encoding="utf-8") as f:
 3. بمجرد الحصول على البيانات، اكتب هذا الكود في آخر سطر فقط:
 DATA_CAPTURE: [الاسم] | [الرقم]
 """
+
 # إعدادات الربط من الـ Secrets
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
@@ -61,8 +62,6 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"): st.markdown(user_input)
 
-   
-    
     conversation = [{"role": "system", "content": system_prompt}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
     with st.chat_message("assistant"):
