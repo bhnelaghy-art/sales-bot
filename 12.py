@@ -12,21 +12,20 @@ TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
 
-# دالة لقراءة البيانات الموجودة في الشيت لمنع التكرار (الأسماء والأرقام)
+# دالة لقراءة البيانات الموجودة في الشيت لمنع التكرار
 def get_existing_data():
     try:
         creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
         service = build("sheets", "v4", credentials=creds)
         result = service.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID, range="Sheet1!A:B").execute()
         rows = result.get('values', [])
-        # إرجاع الأسماء والأرقام كـ مجموعات (sets) للبحث السريع
         names = {row[0].strip().lower() for row in rows if len(row) > 0}
         phones = {row[1].strip() for row in rows if len(row) > 1}
         return names, phones
     except:
         return set(), set()
 
-# دالة إضافة البيانات للشيت
+# دالة إضافة البيانات للشيت مع كشف الأخطاء
 def append_to_sheet(name, phone):
     try:
         creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
@@ -37,7 +36,9 @@ def append_to_sheet(name, phone):
             valueInputOption="RAW", body={"values": values}
         ).execute()
         return True
-    except: return False
+    except Exception as e:
+        st.error(f"خطأ تقني في الاتصال بـ Google Sheets: {e}")
+        return False
 
 # دالة إرسال التنبيه
 def send_telegram_alert(name, phone):
@@ -90,7 +91,7 @@ if user_input := st.chat_input("أدخل البيانات..."):
                     send_telegram_alert(st.session_state.temp_name, phone_clean)
                     response = "✅ تم التسجيل بنجاح وتم حفظ البيانات في الشيت!"
                 else:
-                    response = "خطأ في الاتصال بقاعدة البيانات."
+                    response = "تعذر التسجيل بسبب خطأ في قاعدة البيانات."
                 st.session_state.step = "ask_name"
 
         st.markdown(response)
