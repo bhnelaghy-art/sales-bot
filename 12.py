@@ -6,8 +6,8 @@ from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-# --- ضبط الواجهة لليمين ---
-st.set_page_config(layout="wide")
+# --- 1. ضبط الواجهة لليمين ---
+st.set_page_config(layout="wide", page_title="نظام تسجيل العملاء")
 st.markdown("""
     <style>
         [data-testid="stAppViewContainer"] { direction: rtl; text-align: right; }
@@ -15,13 +15,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 1. إعدادات الـ Secrets
+# --- 2. إعدادات الـ Secrets ---
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
 
-# 2. تعريف الدوال
+# --- 3. تعريف الدوال ---
 def get_sheet_name(service):
     spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
     return spreadsheet['sheets'][0]['properties']['title']
@@ -62,7 +62,7 @@ def send_telegram_alert(name, phone):
         return True
     except: return False
 
-# 3. لوحة التحكم الجانبية
+# --- 4. لوحة التحكم الجانبية ---
 with st.sidebar:
     st.header("⚙️ لوحة تحكم المدير")
     password = st.text_input("كلمة مرور المدير:", type="password")
@@ -71,11 +71,58 @@ with st.sidebar:
         names, phones = get_existing_data()
         st.metric("إجمالي العملاء", len(names))
         if st.button("عرض آخر 5 سجلات"):
-            # ... كود عرض الجدول ...
-            st.write("تم عرض السجلات")
+            creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
+            service = build("sheets", "v4", credentials=creds)
+            sheet_name = get_sheet_name(service)
+            result = service.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID, range=f"{sheet_name}!A:C").execute()
+            rows = result.get('values', [])
+            if rows: st.table(rows[-5:])
     else:
         st.warning("أدخل كلمة المرور لعرض الإحصائيات")
 
-# 4. الواجهة الرئيسية
+# --- 5. الواجهة الرئيسية للبوت ---
 st.title("🎯 نظام تسجيل العملاء")
-# ... باقي الكود ...
+
+if "step" not in st.session_state: st.session_state.step = "ask_name"
+if "temp_name" not in st.session_state: st.session_state.temp_name = ""
+if "messages" not in st.session_state: st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]): st.markdown(msg["content"])
+
+if user_input := st.chat_input("أدخل البيانات..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"): st.markdown(user_input)
+    with st.chat_message("assistant"):
+        response = ""
+        existing_names, existing_phones = get_existing_data()
+        
+        if st.session_state.step == "ask_name":
+            clean_name = user_input.strip().lower()
+            if len(user_input.split()) < 3:
+                response = "عذراً، يرجى إدخال الاسم الثلاثي بالكامل."
+            elif clean_name in existing_names:
+                response = "هذا الاسم مسجل لدينا مسبقاً."
+            else:
+                st.session_state.temp_name = user_input.strip()
+                st.session_state.step = "ask_phone"
+                response = "تم حفظ الاسم. من فضلك الآن أرسل رقم الهاتف (11 رقم)."
+
+        elif st.session_state.step == "ask_phone":
+            phone_clean = re.sub(r'\D', '', user_input)
+            if len(phone_clean) != 11 or not phone_clean.startswith(('010', '011', '012', '015')):
+                response = "الرقم غير صحيح! أعد كتابة رقم مصري مكون من 11 رقماً."
+            elif phone_clean in existing_phones:
+                response = "هذا الرقم مسجل مسبقاً في نظامنا."
+                st.session_state.step = "ask_name"
+            else:
+                with st.spinner('جاري الحفظ في قاعدة البيانات...'):
+                    if append_to_sheet(st.session_state.temp_name, phone_clean):
+                        send_telegram_alert(st.session_state.temp_name, phone_clean)
+                        response = "✅ تم التسجيل بنجاح في قاعدة البيانات!"
+                    else:
+                        response = "⚠️ تعذر التسجيل بسبب خطأ تقني."
+                st.session_state.step = "ask_name"
+
+        st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
