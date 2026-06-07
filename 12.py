@@ -6,13 +6,29 @@ from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-# --- 1. الإعدادات الأساسية وتنسيق الواجهة ---
+# --- 1. الإعدادات الأساسية وتنسيق الواجهة (RTL بالكامل) ---
 st.set_page_config(page_title="نظام تسجيل العملاء", page_icon="🎯", layout="centered")
 
 st.markdown("""
     <style>
-        .main { direction: rtl; text-align: right; }
-        .stButton>button { width: 100%; border-radius: 5px; }
+        /* ضبط اتجاه الصفحة بالكامل لليمين */
+        .main, .stApp {
+            direction: rtl;
+            text-align: right;
+        }
+        /* ضبط القائمة الجانبية */
+        [data-testid="stSidebar"] {
+            direction: rtl;
+            text-align: right;
+        }
+        /* ضبط صناديق الإدخال والرسائل */
+        div[data-baseweb="input"] {
+            direction: rtl;
+        }
+        .stButton>button {
+            width: 100%;
+            border-radius: 5px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
