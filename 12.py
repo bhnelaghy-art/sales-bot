@@ -10,7 +10,7 @@ with open("knowledge.txt", "r", encoding="utf-8") as f:
     knowledge_base = f.read()
 
 # وغير الـ system_prompt عشان يستخدم الـ knowledge_base دي:
-system_prompt = f"""
+ب= f"""
 أنت وحش المبيعات المحترف. 
 معلومات الكورس التي يجب أن تلتزم بها هي:
 {knowledge_base}
