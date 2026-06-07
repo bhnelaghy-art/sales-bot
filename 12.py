@@ -1,7 +1,7 @@
 import streamlit as st
 from groq import Groq
 import json
-import requests  # مكتبة جديدة للربط مع تليجرام
+import requests  #مكتبة جديدة للربط مع تليجرام
 from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
