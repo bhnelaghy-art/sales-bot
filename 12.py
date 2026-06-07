@@ -18,25 +18,24 @@ def send_telegram_alert(name, phone):
         return True
     except: return False
 
-st.title("🎯 بوت المبيعات الذكي (مطور)")
+st.title("🎯 بوت المبيعات الذكي")
 
 if "messages" not in st.session_state: st.session_state.messages = []
 for msg in st.session_state.messages:
     if "CAPTURE_DATA:" not in msg["content"]:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-if user_input := st.chat_input("تفضل، أنا معك..."):
+if user_input := st.chat_input("اكتب اسمك ورقم هاتفك..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"): st.markdown(user_input)
 
     with st.chat_message("assistant"):
         client = Groq(api_key=GROQ_API_KEY)
         
-        # تعليمات البوت مع التمييز بين الأسماء
         system_prompt = """أنت خبير مبيعات. مهمتك استخراج الاسم ورقم الهاتف.
-        - إذا كان الاسم المذكور قصيراً أو يحتمل التشابه، اطلب من العميل كتابة الاسم بالكامل (الاسم واسم العائلة).
-        - اكتب فقط في نهاية ردك: CAPTURE_DATA: [الاسم بالكامل] | [الرقم]
-        - تأكد أن الرقم مصري (010, 011, 012, 015) وبطول 11 رقم."""
+        - تأكد من الحصول على الاسم كاملاً (اسمين فأكثر).
+        - تأكد من الحصول على رقم هاتف مصري (11 رقم يبدأ بـ 010 أو 011 أو 012 أو 015).
+        - اكتب في نهاية ردك حصراً: CAPTURE_DATA: [الاسم] | [الرقم]"""
         
         conversation = [{"role": "system", "content": system_prompt}] + \
                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
@@ -50,26 +49,24 @@ if user_input := st.chat_input("تفضل، أنا معك..."):
                 extracted = response.split("CAPTURE_DATA:")[1].strip()
                 name, phone = [x.strip() for x in extracted.split("|")]
                 
-                # --- نظام الفلترة الذكي ---
+                # تنظيف الرقم
                 phone_clean = re.sub(r'\D', '', phone)
+                
+                # شروط الفلترة
                 valid_prefixes = ('010', '011', '012', '015')
-                
-                # التحقق من أن الرقم 11 رقم ويبدأ بالأكواد الصحيحة
                 is_valid_phone = len(phone_clean) == 11 and phone_clean.startswith(valid_prefixes)
-                
-                # التحقق من الاسم (يجب أن يحتوي على مسافة واحدة على الأقل لضمان وجود اسم ولقب)
-                is_valid_name = len(name.split()) >= 2 and not re.search(r'[!@#$%^&*()_+]', name)
+                is_valid_name = len(name.split()) >= 2  # يقبل اسمين فأكثر
                 
                 if is_valid_phone and is_valid_name:
                     if send_telegram_alert(name, phone_clean):
-                        st.toast(f"✅ تم تأكيد بيانات العميل: {name}")
+                        st.toast(f"✅ تم تسجيل: {name}")
                     else:
                         st.toast("⚠️ فشل الاتصال بتليجرام")
                 else:
-                    st.toast(f"❌ بيانات مرفوضة: الاسم يجب أن يكون رباعياً أو اسمين على الأقل، والرقم مصري 11 رقم.")
+                    st.toast("❌ يرجى كتابة الاسم كاملاً ورقم هاتف مصري صحيح.")
             
-            except Exception as e:
-                st.toast("⚠️ خطأ في تنسيق البيانات")
+            except Exception:
+                st.toast("⚠️ تعذر استخراج البيانات.")
             
             response = response.split("CAPTURE_DATA:")[0]
             
