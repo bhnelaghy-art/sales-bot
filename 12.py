@@ -1,21 +1,33 @@
 import streamlit as st
 import json
-import requests
-from datetime import datetime
 from groq import Groq
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
 
 # إعدادات الـ Secrets
 try:
-    SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-    GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
-    TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
-    TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
-except Exception as e:
-    st.error(f"خطأ في تحميل البيانات السرية: {e}")
-    st.stop() # إيقاف البوت لو الـ Secrets مش موجودة
+except:
+    st.error("خطأ: مفتاح Groq غير موجود في الـ Secrets")
+    st.stop()
 
 st.title("🎯 منظومة المبيعات الذكية")
-st.write("البوت يعمل الآن ومربوط بقاعدة البيانات!")
+
+# معالجة الرسائل
+if "messages" not in st.session_state: st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]): st.markdown(msg["content"])
+
+if user_input := st.chat_input("اكتب رسالتك هنا..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"): st.markdown(user_input)
+
+    with st.chat_message("assistant"):
+        client = Groq(api_key=GROQ_API_KEY)
+        completion = client.chat.completions.create(
+            model="llama-3.1-8b-instant", 
+            messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
+            temperature=0.1
+        )
+        response = completion.choices[0].message.content
+        st.markdown(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
