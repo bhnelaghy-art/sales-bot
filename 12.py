@@ -1,16 +1,43 @@
 import streamlit as st
 import requests
 import re
+import json
+from datetime import datetime
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 # إعدادات الـ Secrets
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
+SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
+GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
 
-# تخزين الأسماء والأرقام للتأكد من عدم التكرار مطلقاً
-if "registered_names" not in st.session_state:
-    st.session_state.registered_names = []
-if "registered_phones" not in st.session_state:
-    st.session_state.registered_phones = []
+# دالة لقراءة البيانات الموجودة في الشيت لمنع التكرار (الأسماء والأرقام)
+def get_existing_data():
+    try:
+        creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
+        service = build("sheets", "v4", credentials=creds)
+        result = service.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID, range="Sheet1!A:B").execute()
+        rows = result.get('values', [])
+        # إرجاع الأسماء والأرقام كـ مجموعات (sets) للبحث السريع
+        names = {row[0].strip().lower() for row in rows if len(row) > 0}
+        phones = {row[1].strip() for row in rows if len(row) > 1}
+        return names, phones
+    except:
+        return set(), set()
+
+# دالة إضافة البيانات للشيت
+def append_to_sheet(name, phone):
+    try:
+        creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        service = build("sheets", "v4", credentials=creds)
+        values = [[name, phone, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]]
+        service.spreadsheets().values().append(
+            spreadsheetId=SPREADSHEET_ID, range="Sheet1!A:C",
+            valueInputOption="RAW", body={"values": values}
+        ).execute()
+        return True
+    except: return False
 
 # دالة إرسال التنبيه
 def send_telegram_alert(name, phone):
@@ -21,7 +48,7 @@ def send_telegram_alert(name, phone):
         return True
     except: return False
 
-st.title("🎯 نظام تسجيل العملاء (صارم جداً)")
+st.title("🎯 نظام تسجيل العملاء (الربط المباشر مع الشيت)")
 
 if "step" not in st.session_state: st.session_state.step = "ask_name"
 if "temp_name" not in st.session_state: st.session_state.temp_name = ""
@@ -36,18 +63,15 @@ if user_input := st.chat_input("أدخل البيانات..."):
 
     with st.chat_message("assistant"):
         response = ""
+        existing_names, existing_phones = get_existing_data()
         
         if st.session_state.step == "ask_name":
             clean_name = user_input.strip().lower()
             
-            # شرط 1: التأكد من أنه اسم ثلاثي
             if len(user_input.split()) < 3:
                 response = "عذراً، يرجى إدخال الاسم الثلاثي بالكامل."
-            
-            # شرط 2: التأكد من عدم تكرار الاسم في قاعدة بياناتنا
-            elif clean_name in st.session_state.registered_names:
-                response = "هذا الاسم مسجل لدينا مسبقاً، لا يمكن تسجيله مرة أخرى."
-            
+            elif clean_name in existing_names:
+                response = "هذا الاسم مسجل لدينا مسبقاً في قاعدة البيانات."
             else:
                 st.session_state.temp_name = user_input.strip()
                 st.session_state.step = "ask_phone"
@@ -56,22 +80,17 @@ if user_input := st.chat_input("أدخل البيانات..."):
         elif st.session_state.step == "ask_phone":
             phone_clean = re.sub(r'\D', '', user_input)
             
-            # شرط 1: التأكد من صحة الرقم
             if len(phone_clean) != 11 or not phone_clean.startswith(('010', '011', '012', '015')):
                 response = "الرقم غير صحيح! أعد كتابة رقم مصري مكون من 11 رقماً."
-            
-            # شرط 2: التأكد من عدم تكرار الرقم
-            elif phone_clean in st.session_state.registered_phones:
+            elif phone_clean in existing_phones:
                 response = "هذا الرقم مسجل مسبقاً في نظامنا."
-                st.session_state.step = "ask_name" # العودة للبداية
-            
+                st.session_state.step = "ask_name"
             else:
-                if send_telegram_alert(st.session_state.temp_name, phone_clean):
-                    st.session_state.registered_names.append(st.session_state.temp_name.lower())
-                    st.session_state.registered_phones.append(phone_clean)
-                    response = "✅ تم التسجيل بنجاح!"
+                if append_to_sheet(st.session_state.temp_name, phone_clean):
+                    send_telegram_alert(st.session_state.temp_name, phone_clean)
+                    response = "✅ تم التسجيل بنجاح وتم حفظ البيانات في الشيت!"
                 else:
-                    response = "خطأ في الاتصال، حاول لاحقاً."
+                    response = "خطأ في الاتصال بقاعدة البيانات."
                 st.session_state.step = "ask_name"
 
         st.markdown(response)
