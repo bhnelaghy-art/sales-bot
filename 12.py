@@ -1,15 +1,23 @@
 import streamlit as st
 from groq import Groq
 import json
+import requests  # مكتبة جديدة للربط مع تليجرام
 from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+
+# إعدادات الربط من الـ Secrets
+SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
 # قراءة ملف المعرفة
 with open("knowledge.txt", "r", encoding="utf-8") as f:
     knowledge_base = f.read()
 
-# تعريف الـ system_prompt بشكل صحيح
+# تعريف الـ system_prompt
 system_prompt = f"""
 أنت وحش المبيعات المحترف. 
 معلومات الكورس التي يجب أن تلتزم بها هي:
@@ -21,16 +29,17 @@ system_prompt = f"""
 DATA_CAPTURE: [الاسم] | [الرقم]
 """
 
-# إعدادات الربط من الـ Secrets
-SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
+# دالة إرسال تنبيه لتليجرام
+def send_telegram_alert(name, phone):
+    message = f"🎯 عميل جديد اشترى!\n\nالاسم: {name}\nالرقم: {phone}\nالتوقيت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}"
+    requests.get(url)
 
+# دالة تسجيل البيانات في الشيت
 def append_to_sheet(name, phone):
     try:
         creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
         service = build("sheets", "v4", credentials=creds)
-        
         spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         sheet_name = spreadsheet['sheets'][0]['properties']['title']
         
@@ -41,11 +50,15 @@ def append_to_sheet(name, phone):
             valueInputOption="RAW",
             body={"values": values}
         ).execute()
+        
+        # بعد التسجيل، نرسل التنبيه
+        send_telegram_alert(name, phone)
         return True
     except Exception as e:
         st.error(f"خطأ في الشيت: {e}")
         return False
 
+# واجهة المستخدم
 st.set_page_config(page_title="منظومة المبيعات الذكية", page_icon="🎯", layout="centered")
 st.markdown("""<style>.stApp { direction: RTL; text-align: right; } div[data-testid="stChatMessage"] { direction: RTL !important; text-align: right !important; }</style>""", unsafe_allow_html=True)
 
@@ -53,7 +66,6 @@ st.title("🎯 منظومة المبيعات الذكية")
 
 if "messages" not in st.session_state: st.session_state.messages = []
 
-# عرض الرسائل
 for msg in st.session_state.messages:
     if "DATA_CAPTURE:" not in msg["content"]:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -78,7 +90,7 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
                     name = parts[0].strip("[] ")
                     phone = parts[1].strip("[] ")
                     if append_to_sheet(name, phone):
-                        st.toast("✅ تم تسجيل بيانات العميل بنجاح!", icon="🎯")
+                        st.toast("✅ تم تسجيل بيانات العميل وإرسال التنبيه!", icon="🎯")
             except: pass
             full_response = full_response.split("DATA_CAPTURE:")[0].strip()
             
