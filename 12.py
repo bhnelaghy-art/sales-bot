@@ -43,7 +43,7 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
         
         # استخدام الموديل الأقوى llama3-70b
         response = client.chat.completions.create(
-            model="llama3-70b-8192", 
+            model="llama-3.1-8b-instant", 
             messages=conversation, 
             temperature=0.1
         ).choices[0].message.content
