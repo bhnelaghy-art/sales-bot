@@ -1,7 +1,7 @@
 import streamlit as st
 from groq import Groq
 import json
-import requests  #مكتبة جديدة للربط مع تليجرام
+import requests
 from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -14,8 +14,11 @@ TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
 # قراءة ملف المعرفة
-with open("knowledge.txt", "r", encoding="utf-8") as f:
-    knowledge_base = f.read()
+try:
+    with open("knowledge.txt", "r", encoding="utf-8") as f:
+        knowledge_base = f.read()
+except:
+    knowledge_base = "لا توجد معلومات إضافية."
 
 # تعريف الـ system_prompt
 system_prompt = f"""
@@ -31,9 +34,12 @@ DATA_CAPTURE: [الاسم] | [الرقم]
 
 # دالة إرسال تنبيه لتليجرام
 def send_telegram_alert(name, phone):
-    message = f"🎯 عميل جديد اشترى!\n\nالاسم: {name}\nالرقم: {phone}\nالتوقيت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}"
-    requests.get(url)
+    try:
+        message = f"🎯 عميل جديد اشترى!\n\nالاسم: {name}\nالرقم: {phone}\nالتوقيت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage?chat_id={TELEGRAM_CHAT_ID}&text={message}"
+        requests.get(url)
+    except:
+        pass
 
 # دالة تسجيل البيانات في الشيت
 def append_to_sheet(name, phone):
@@ -51,7 +57,6 @@ def append_to_sheet(name, phone):
             body={"values": values}
         ).execute()
         
-        # بعد التسجيل، نرسل التنبيه
         send_telegram_alert(name, phone)
         return True
     except Exception as e:
