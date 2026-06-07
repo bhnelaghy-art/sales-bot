@@ -8,16 +8,13 @@ from googleapiclient.discovery import build
 # إعدادات الربط من الـ Secrets
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-# تحويل الـ JSON النصي الموجود في الـ Secrets إلى قاموس بيانات (Dictionary)
 GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
 
 def append_to_sheet(name, phone):
     try:
-        # استخدام البيانات مباشرة بدلاً من الملف
         creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
         service = build("sheets", "v4", credentials=creds)
         
-        # جلب اسم أول ورقة في الشيت أوتوماتيكياً
         spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         sheet_name = spreadsheet['sheets'][0]['properties']['title']
         
@@ -49,20 +46,21 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"): st.markdown(user_input)
 
-system_prompt = """
-    أنت وحش المبيعات المحترف لبيع [اسم الكورس الخاص بك].
-    1. السعر ثابت 1799 جنيه فقط. لا تقبل أي تفاوض.
-    2. لا تجب على أي أسئلة خارج نطاق الكورس أو مواضيع عامة. إذا سأل العميل عن شيء خارج الكورس، قل له: "أنا متخصص في تفاصيل هذا الكورس فقط، هل يمكنني مساعدتك في خطوات الحجز؟"
-    3. إذا لم يكن لديك معلومة في ملف المعرفة، لا تؤلف إجابة، بل اطلب منه التواصل مع الدعم الفني.
-    4. بمجرد موافقة العميل، اطلب الاسم ورقم الواتساب فوراً.
-    5. الكود النهائي للبيانات: DATA_CAPTURE: [الاسم] | [الرقم]
-    """    
+    system_prompt = """
+    أنت وحش المبيعات المحترف. 
+    1. السعر النهائي للكورس 1799 جنيه مصري.
+    2. لا تجب على أي أسئلة خارج نطاق الكورس.
+    3. إذا وافق العميل، اطلب منه (الاسم ورقم الواتساب) فوراً.
+    4. بمجرد الحصول على البيانات، اكتب هذا الكود في آخر سطر فقط:
+    DATA_CAPTURE: [الاسم] | [الرقم]
+    """
+    
     conversation = [{"role": "system", "content": system_prompt}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         client = Groq(api_key=GROQ_API_KEY)
-        completion = client.chat.completions.create(model="llama-3.1-8b-instant", messages=conversation, temperature=0.2)
+        completion = client.chat.completions.create(model="llama-3.1-8b-instant", messages=conversation, temperature=0.1)
         full_response = completion.choices[0].message.content
         
         if "DATA_CAPTURE:" in full_response:
@@ -73,7 +71,7 @@ system_prompt = """
                     name = parts[0].strip("[] ")
                     phone = parts[1].strip("[] ")
                     if append_to_sheet(name, phone):
-                        st.toast("✅ تم تسجيل بيانات العميل في الشيت بنجاح!", icon="🎯")
+                        st.toast("✅ تم تسجيل بيانات العميل بنجاح!", icon="🎯")
             except: pass
             full_response = full_response.split("DATA_CAPTURE:")[0].strip()
             
