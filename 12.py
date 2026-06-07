@@ -1,12 +1,15 @@
 import streamlit as st
 import requests
-from groq import Groq
 import re
 
 # إعدادات الـ Secrets
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
+
+# قائمة الأرقام المسجلة (للمنع من التكرار)
+if "registered_phones" not in st.session_state:
+    st.session_state.registered_phones = []
 
 # دالة إرسال التنبيه
 def send_telegram_alert(name, phone):
@@ -17,7 +20,7 @@ def send_telegram_alert(name, phone):
         return True
     except: return False
 
-st.title("🎯 بوت المبيعات (نظام الخطوتين)")
+st.title("🎯 بوت المبيعات (نظام التسجيل الفريد)")
 
 if "step" not in st.session_state: st.session_state.step = "ask_name"
 if "temp_name" not in st.session_state: st.session_state.temp_name = ""
@@ -33,7 +36,6 @@ if user_input := st.chat_input("تفضل..."):
     with st.chat_message("assistant"):
         # الخطوة 1: استلام الاسم الثلاثي
         if st.session_state.step == "ask_name":
-            # التأكد أن الاسم مكون من 3 أجزاء
             if len(user_input.split()) >= 3:
                 st.session_state.temp_name = user_input
                 st.session_state.step = "ask_phone"
@@ -41,13 +43,22 @@ if user_input := st.chat_input("تفضل..."):
             else:
                 response = "ممكن تكتب الاسم الثلاثي بالكامل عشان أقدر أسجله بشكل صحيح؟"
         
-        # الخطوة 2: استلام الرقم والتسجيل
+        # الخطوة 2: استلام الرقم والتسجيل مع التحقق من التكرار
         elif st.session_state.step == "ask_phone":
             phone_clean = re.sub(r'\D', '', user_input)
+            
+            # التحقق من صحة الرقم
             if len(phone_clean) == 11 and phone_clean.startswith(('010', '011', '012', '015')):
-                send_telegram_alert(st.session_state.temp_name, phone_clean)
-                response = "شكراً لك! تم تسجيل بياناتك بنجاح وهنتواصل معاك في أقرب وقت."
-                st.session_state.step = "ask_name" # إعادة الضبط للعميل القادم
+                
+                # التحقق من عدم التكرار
+                if phone_clean in st.session_state.registered_phones:
+                    response = "عفواً، هذا الرقم مسجل لدينا مسبقاً ولا يمكن تسجيله مرة أخرى."
+                    st.session_state.step = "ask_name" # إعادة البوت للبداية
+                else:
+                    send_telegram_alert(st.session_state.temp_name, phone_clean)
+                    st.session_state.registered_phones.append(phone_clean) # حفظ الرقم
+                    response = "شكراً لك! تم تسجيل بياناتك بنجاح وهنتواصل معاك في أقرب وقت."
+                    st.session_state.step = "ask_name" 
             else:
                 response = "الرقم غير صحيح، لازم رقم مصري (11 رقم). من فضلك أعد كتابة الرقم."
 
