@@ -5,6 +5,21 @@ from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
+# ضيف السطر ده عشان يقرأ الملف
+with open("knowledge.txt", "r", encoding="utf-8") as f:
+    knowledge_base = f.read()
+
+# وغير الـ system_prompt عشان يستخدم الـ knowledge_base دي:
+system_prompt = f"""
+أنت وحش المبيعات المحترف. 
+معلومات الكورس التي يجب أن تلتزم بها هي:
+{knowledge_base}
+
+1. السعر ثابت كما في المعلومات.
+2. إذا وافق العميل، اطلب منه (الاسم ورقم الواتساب).
+3. بمجرد الحصول على البيانات، اكتب هذا الكود في آخر سطر فقط:
+DATA_CAPTURE: [الاسم] | [الرقم]
+"""
 # إعدادات الربط من الـ Secrets
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
