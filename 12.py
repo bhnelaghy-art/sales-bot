@@ -1,21 +1,23 @@
 import streamlit as st
 from groq import Groq
-import os
+import json
 from datetime import datetime
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
-# إعدادات الربط
+# إعدادات الربط من الـ Secrets
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
-CREDENTIALS_FILE = "credentials.json"
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+# تحويل الـ JSON النصي الموجود في الـ Secrets إلى قاموس بيانات (Dictionary)
+GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
 
 def append_to_sheet(name, phone):
     try:
-        if not os.path.exists(CREDENTIALS_FILE): return False
-        creds = Credentials.from_service_account_file(CREDENTIALS_FILE, scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        # استخدام البيانات مباشرة بدلاً من الملف
+        creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
         service = build("sheets", "v4", credentials=creds)
         
-        # جلب اسم أول ورقة في الشيت أوتوماتيكياً (عشان نتجنب خطأ الاسم)
+        # جلب اسم أول ورقة في الشيت أوتوماتيكياً
         spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
         sheet_name = spreadsheet['sheets'][0]['properties']['title']
         
@@ -60,7 +62,7 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
 
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
-        client = Groq(api_key=st.secrets["GROQ_API_KEY"]
+        client = Groq(api_key=GROQ_API_KEY)
         completion = client.chat.completions.create(model="llama-3.1-8b-instant", messages=conversation, temperature=0.2)
         full_response = completion.choices[0].message.content
         
