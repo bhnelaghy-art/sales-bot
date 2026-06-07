@@ -12,12 +12,18 @@ TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
 
+# دالة لجلب اسم أول ورقة في الملف تلقائياً لتجنب خطأ الـ Range
+def get_sheet_name(service):
+    spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+    return spreadsheet['sheets'][0]['properties']['title']
+
 # دالة لقراءة البيانات الموجودة في الشيت لمنع التكرار
 def get_existing_data():
     try:
         creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
         service = build("sheets", "v4", credentials=creds)
-        result = service.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID, range="Sheet1!A:B").execute()
+        sheet_name = get_sheet_name(service)
+        result = service.spreadsheets().values().get(spreadsheetId=SPREADSHEET_ID, range=f"{sheet_name}!A:B").execute()
         rows = result.get('values', [])
         names = {row[0].strip().lower() for row in rows if len(row) > 0}
         phones = {row[1].strip() for row in rows if len(row) > 1}
@@ -25,14 +31,15 @@ def get_existing_data():
     except:
         return set(), set()
 
-# دالة إضافة البيانات للشيت مع كشف الأخطاء
+# دالة إضافة البيانات للشيت
 def append_to_sheet(name, phone):
     try:
         creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
         service = build("sheets", "v4", credentials=creds)
+        sheet_name = get_sheet_name(service)
         values = [[name, phone, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]]
         service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID, range="Sheet1!A:C",
+            spreadsheetId=SPREADSHEET_ID, range=f"{sheet_name}!A:C",
             valueInputOption="RAW", body={"values": values}
         ).execute()
         return True
@@ -49,7 +56,7 @@ def send_telegram_alert(name, phone):
         return True
     except: return False
 
-st.title("🎯 نظام تسجيل العملاء (الربط المباشر مع الشيت)")
+st.title("🎯 نظام تسجيل العملاء (الربط التلقائي)")
 
 if "step" not in st.session_state: st.session_state.step = "ask_name"
 if "temp_name" not in st.session_state: st.session_state.temp_name = ""
@@ -68,7 +75,6 @@ if user_input := st.chat_input("أدخل البيانات..."):
         
         if st.session_state.step == "ask_name":
             clean_name = user_input.strip().lower()
-            
             if len(user_input.split()) < 3:
                 response = "عذراً، يرجى إدخال الاسم الثلاثي بالكامل."
             elif clean_name in existing_names:
@@ -80,7 +86,6 @@ if user_input := st.chat_input("أدخل البيانات..."):
 
         elif st.session_state.step == "ask_phone":
             phone_clean = re.sub(r'\D', '', user_input)
-            
             if len(phone_clean) != 11 or not phone_clean.startswith(('010', '011', '012', '015')):
                 response = "الرقم غير صحيح! أعد كتابة رقم مصري مكون من 11 رقماً."
             elif phone_clean in existing_phones:
@@ -89,9 +94,9 @@ if user_input := st.chat_input("أدخل البيانات..."):
             else:
                 if append_to_sheet(st.session_state.temp_name, phone_clean):
                     send_telegram_alert(st.session_state.temp_name, phone_clean)
-                    response = "✅ تم التسجيل بنجاح وتم حفظ البيانات في الشيت!"
+                    response = "✅ تم التسجيل بنجاح في قاعدة البيانات!"
                 else:
-                    response = "تعذر التسجيل بسبب خطأ في قاعدة البيانات."
+                    response = "تعذر التسجيل بسبب خطأ تقني."
                 st.session_state.step = "ask_name"
 
         st.markdown(response)
