@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 from groq import Groq
 
 # إعدادات الـ Secrets
@@ -18,11 +17,11 @@ def send_telegram_alert(name, phone):
     except: pass
 
 # واجهة الشات
-st.title("🎯 بوت المبيعات الذكي (مستوى احترافي)")
+st.title("🎯 بوت المبيعات الذكي")
 
 if "messages" not in st.session_state: st.session_state.messages = []
 for msg in st.session_state.messages:
-    if "DATA_CAPTURE:" not in msg["content"]:
+    if "CAPTURE_DATA:" not in msg["content"]:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
 if user_input := st.chat_input("اكتب رسالتك هنا..."):
@@ -32,39 +31,37 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
     with st.chat_message("assistant"):
         client = Groq(api_key=GROQ_API_KEY)
         
-        # تعليمات صارمة للموديل الأذكى
-        system_prompt = """أنت مساعد مبيعات محترف.
-        1. لا تطلب البيانات إلا إذا وافق العميل على الشراء.
-        2. عند توفر الاسم والرقم، اكتب فقط: DATA_CAPTURE: {"name": "الاسم", "phone": "الرقم"}
-        3. تحذير: لا ترسل DATA_CAPTURE نهائياً إذا كانت البيانات غير مكتملة أو غير واضحة."""
+        # تعليمات مبسطة للبوت (أسهل للموديلات الصغيرة)
+        system_prompt = """أنت مساعد مبيعات. عندما يزودك العميل باسمه ورقم هاتفه، اكتب فقط هذه الصيغة:
+        CAPTURE_DATA: الاسم | الرقم
+        لا تكتب أي شيء آخر مع هذه الصيغة."""
         
         conversation = [{"role": "system", "content": system_prompt}] + \
                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
         
-        # استخدام الموديل الأقوى llama3-70b
+        # استخدام الموديل المستقر والسريع
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant", 
             messages=conversation, 
             temperature=0.1
         ).choices[0].message.content
         
-        # معالجة JSON مع تنظيف إضافي
-        if "DATA_CAPTURE:" in response:
+        # معالجة البيانات بطريقة بسيطة ومضمونة
+        if "CAPTURE_DATA:" in response:
             try:
-                json_part = response.split("DATA_CAPTURE:")[1].strip()
-                data = json.loads(json_part) 
-                name = str(data.get("name", "")).strip()
-                phone = str(data.get("phone", "")).strip()
+                # استخراج البيانات من النص
+                content = response.split("CAPTURE_DATA:")[1].strip()
+                name, phone = content.split("|")
                 
-                # شرط التحقق قبل الإرسال
-                if len(name) > 1 and len(phone) >= 7:
-                    send_telegram_alert(name, phone)
+                # شرط التحقق (لا يرسل إلا لو البيانات حقيقية)
+                if len(name.strip()) > 1 and len(phone.strip()) >= 7:
+                    send_telegram_alert(name.strip(), phone.strip())
                     st.toast("✅ تم تسجيل بيانات العميل بنجاح!")
             except: 
                 pass
             
             # تنظيف رد البوت
-            response = response.split("DATA_CAPTURE:")[0]
+            response = response.split("CAPTURE_DATA:")[0]
             
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
