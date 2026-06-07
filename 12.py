@@ -61,14 +61,7 @@ if user_input := st.chat_input("اكتب رسالتك هنا..."):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"): st.markdown(user_input)
 
-    system_prompt = """
-    أنت وحش المبيعات المحترف. 
-    1. السعر النهائي للكورس 1799 جنيه مصري.
-    2. لا تجب على أي أسئلة خارج نطاق الكورس.
-    3. إذا وافق العميل، اطلب منه (الاسم ورقم الواتساب) فوراً.
-    4. بمجرد الحصول على البيانات، اكتب هذا الكود في آخر سطر فقط:
-    DATA_CAPTURE: [الاسم] | [الرقم]
-    """
+   
     
     conversation = [{"role": "system", "content": system_prompt}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
 
