@@ -3,15 +3,13 @@ import requests
 import re
 
 # إعدادات الـ Secrets
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
 TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
-# تخزين السجلات (الأسماء والأرقام) لمنع التكرار
 if "registered_clients" not in st.session_state:
     st.session_state.registered_clients = []
 
-# دالة إرسال التنبيه
+# دالة إرسال التنبيه (تشتغل فقط إذا اكتملت الشروط)
 def send_telegram_alert(name, phone):
     try:
         msg = f"🎯 عميل جديد!\nالاسم: {name}\nالرقم: {phone}"
@@ -20,7 +18,7 @@ def send_telegram_alert(name, phone):
         return True
     except: return False
 
-st.title("🎯 بوت التسجيل (منع التكرار)")
+st.title("🎯 بوت التسجيل (نظام صارم)")
 
 if "step" not in st.session_state: st.session_state.step = "ask_name"
 if "temp_name" not in st.session_state: st.session_state.temp_name = ""
@@ -34,36 +32,37 @@ if user_input := st.chat_input("تفضل..."):
     with st.chat_message("user"): st.markdown(user_input)
 
     with st.chat_message("assistant"):
-        # الخطوة 1: استلام الاسم الثلاثي
+        # الخطوة 1: طلب الاسم الثلاثي (إجباري)
         if st.session_state.step == "ask_name":
+            # التحقق: هل المدخل اسم ثلاثي؟
             if len(user_input.split()) >= 3:
                 st.session_state.temp_name = user_input.strip()
                 st.session_state.step = "ask_phone"
-                response = "تمام يا فندم، سجلت الاسم. ممكن رقم موبايلك؟"
+                response = "شكراً، تم حفظ الاسم. من فضلك اكتب رقم الموبايل الآن للتسجيل."
             else:
-                response = "من فضلك سجل الاسم الثلاثي بالكامل."
-        
-        # الخطوة 2: استلام الرقم والتحقق من التكرار
+                response = "عذراً، يرجى كتابة الاسم الثلاثي بالكامل للمتابعة."
+
+        # الخطوة 2: طلب الرقم (إجباري)
         elif st.session_state.step == "ask_phone":
             phone_clean = re.sub(r'\D', '', user_input)
             
+            # التحقق: هل الرقم مصري وسليم؟
             if len(phone_clean) == 11 and phone_clean.startswith(('010', '011', '012', '015')):
-                # إنشاء بصمة فريدة للعميل
-                client_id = f"{st.session_state.temp_name.lower()}|{phone_clean}"
                 
+                # التحقق: هل مكرر؟
+                client_id = f"{st.session_state.temp_name.lower()}|{phone_clean}"
                 if client_id in st.session_state.registered_clients:
-                    response = "عذراً، هذا الاسم وهذا الرقم مسجلان لدينا مسبقاً."
+                    response = "هذا الاسم وهذا الرقم مسجلان مسبقاً. العملية مرفوضة."
                     st.session_state.step = "ask_name"
                 else:
                     if send_telegram_alert(st.session_state.temp_name, phone_clean):
                         st.session_state.registered_clients.append(client_id)
-                        response = "شكراً! تم تسجيل بياناتك بنجاح."
+                        response = "تم تسجيلك بنجاح!"
                     else:
-                        response = "حدث خطأ في الاتصال، يرجى المحاولة لاحقاً."
-                    st.session_state.step = "ask_name" 
+                        response = "خطأ في الاتصال، حاول لاحقاً."
+                    st.session_state.step = "ask_name"
             else:
-                response = "رقم غير صحيح، يرجى إدخال رقم مصري (11 رقم)."
+                response = "الرقم غير صحيح! يرجى إدخال رقم موبايل مصري مكون من 11 رقماً."
 
         st.markdown(response)
         st.session_state.messages.append({"role": "assistant", "content": response})
-        
