@@ -1,46 +1,29 @@
 import streamlit as st
-import json
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from datetime import datetime
+import requests
 
 # إعدادات الـ Secrets
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
-GCP_CREDENTIALS = json.loads(st.secrets["GCP_CREDENTIALS"])
+TELEGRAM_TOKEN = st.secrets["TELEGRAM_TOKEN"]
+TELEGRAM_CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
-def append_to_sheet(name, phone):
+def send_test_telegram(message):
     try:
-        # إعداد الاتصال بجوجل شيت
-        creds = Credentials.from_service_account_info(GCP_CREDENTIALS, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        service = build("sheets", "v4", credentials=creds)
-        
-        # تجهيز البيانات
-        values = [[name, phone, datetime.now().strftime("%Y-%m-%d %H:%M:%S")]]
-        
-        # إضافة البيانات للنطاق المباشر (بدون الاعتماد على اسم الورقة)
-        service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range="A:C", 
-            valueInputOption="RAW",
-            body={"values": values}
-        ).execute()
-        
-        return True
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        params = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+        response = requests.get(url, params=params)
+        return response.status_code == 200
     except Exception as e:
         return str(e)
 
-st.title("🎯 اختبار تسجيل البيانات")
+st.title("🎯 اختبار تليجرام")
 
-name = st.text_input("الاسم")
-phone = st.text_input("رقم الهاتف")
+test_msg = st.text_input("اكتب رسالة للتجربة:")
 
-if st.button("تجربة التسجيل في الشيت"):
-    if name and phone:
-        result = append_to_sheet(name, phone)
+if st.button("إرسال رسالة لتليجرام"):
+    if test_msg:
+        result = send_test_telegram(test_msg)
         if result == True:
-            st.success("✅ تم التسجيل بنجاح في الشيت!")
+            st.success("✅ وصلت الرسالة على تليجرام!")
         else:
             st.error(f"خطأ: {result}")
     else:
-        st.warning("يرجى إدخال الاسم والرقم أولاً.")
+        st.warning("اكتب رسالة الأول!")
